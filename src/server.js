@@ -70,16 +70,23 @@ export function createApp({ handler, whatsappConfig, log = console }) {
 }
 
 async function main() {
-  const missing = [
-    ['WHATSAPP_TOKEN', config.whatsapp.token],
-    ['WHATSAPP_PHONE_NUMBER_ID', config.whatsapp.phoneNumberId],
+  // Sem base de dados ou token de verificação o servidor não tem como funcionar.
+  const required = [
     ['WEBHOOK_VERIFY_TOKEN', config.whatsapp.verifyToken],
-    ['GEMINI_API_KEY', config.gemini.apiKey],
     ['DATABASE_URL', config.database.url],
   ].filter(([, v]) => !v);
-  if (missing.length) {
-    console.error(`Faltam variáveis no .env: ${missing.map(([k]) => k).join(', ')}`);
+  if (required.length) {
+    console.error(`Faltam variáveis de ambiente: ${required.map(([k]) => k).join(', ')}`);
     process.exit(1);
+  }
+  // Sem estas o servidor arranca (para a Meta poder verificar o webhook), mas não responde a mensagens.
+  const pending = [
+    ['WHATSAPP_TOKEN', config.whatsapp.token],
+    ['WHATSAPP_PHONE_NUMBER_ID', config.whatsapp.phoneNumberId],
+    ['GEMINI_API_KEY', config.gemini.apiKey],
+  ].filter(([, v]) => !v);
+  if (pending.length) {
+    console.warn(`AVISO: faltam ${pending.map(([k]) => k).join(', ')} — o bot ainda não consegue responder.`);
   }
   if (!config.whatsapp.appSecret) {
     console.warn('AVISO: META_APP_SECRET vazio — o webhook aceita pedidos sem validar a assinatura.');
