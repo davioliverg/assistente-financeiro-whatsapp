@@ -1,9 +1,12 @@
-# Blueprint opcional para o Render (https://render.com): cria o serviço web + Postgres.
+# Blueprint do Render: serviço web + Postgres, ambos no plano gratuito (Frankfurt).
+# As chaves secretas NÃO ficam aqui: são colocadas no painel do Render, em Environment:
+#   WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, META_APP_SECRET, GEMINI_API_KEY, ALLOWED_NUMBERS
 services:
   - type: web
     name: assistente-financeiro-whatsapp
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
@@ -12,20 +15,12 @@ services:
         fromDatabase:
           name: assistente-financeiro-db
           property: connectionString
-      - key: WHATSAPP_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
       - key: WEBHOOK_VERIFY_TOKEN
-        sync: false
-      - key: META_APP_SECRET
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
+        generateValue: true
       - key: GEMINI_MODEL
         value: gemini-3.8-flash
-      - key: ALLOWED_NUMBERS
-        sync: false
+      - key: GRAPH_API_VERSION
+        value: v25.0
       - key: DEFAULT_CURRENCY
         value: EUR
       - key: DEFAULT_TIMEZONE
@@ -33,3 +28,5 @@ services:
 databases:
   - name: assistente-financeiro-db
     plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
