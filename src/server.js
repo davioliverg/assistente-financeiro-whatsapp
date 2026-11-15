@@ -28,6 +28,38 @@ export function createApp({ handler, whatsappConfig, log = console }) {
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
+  // Política de privacidade pública (a Meta exige um URL destes para publicar a app).
+  app.get('/privacidade', (_req, res) => {
+    const name = process.env.BOT_NAME || 'Assistente financeiro';
+    const contact = process.env.CONTACT_EMAIL;
+    res.type('html').send(`<!doctype html>
+<html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — ${name}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.6em}</style>
+</head><body>
+<h1>Política de Privacidade — ${name}</h1>
+<p>O ${name} é um assistente financeiro pessoal que funciona por WhatsApp. Esta página explica que dados são tratados e para quê.</p>
+<h2>Dados que recolhemos</h2>
+<ul>
+<li>O seu número de telefone e o nome do perfil do WhatsApp.</li>
+<li>As mensagens que envia ao assistente (texto, áudio e imagens de recibos).</li>
+<li>Os lançamentos financeiros criados a partir dessas mensagens: valor, descrição, categoria e data.</li>
+</ul>
+<h2>Para que são usados</h2>
+<p>Apenas para registar os seus gastos e ganhos e responder às suas perguntas sobre eles. Não vendemos dados nem os usamos para publicidade. O assistente não tem acesso às suas contas bancárias.</p>
+<h2>Com quem são partilhados</h2>
+<ul>
+<li><strong>Meta (WhatsApp Business Platform)</strong>: transporte das mensagens.</li>
+<li><strong>Google (API Gemini)</strong>: interpretação do texto, áudio e imagens enviados.</li>
+<li><strong>Render</strong>: alojamento do servidor e da base de dados.</li>
+</ul>
+<h2>Conservação</h2>
+<p>Os lançamentos ficam guardados enquanto usar o serviço. Os ficheiros de áudio e imagem são processados no momento e não são guardados pelo assistente.</p>
+<h2>Os seus direitos</h2>
+<p>Pode pedir a consulta, correção ou eliminação dos seus dados a qualquer momento${contact ? `, escrevendo para <a href="mailto:${contact}">${contact}</a>` : ', contactando o responsável pelo serviço'}. Pode também apagar o último lançamento enviando "apagar último" ao assistente.</p>
+</body></html>`);
+  });
+
   // Verificação do webhook: a Meta chama isto uma vez quando você o configura.
   app.get('/webhook', (req, res) => {
     const ok =
