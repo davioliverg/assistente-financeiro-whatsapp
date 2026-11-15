@@ -8,6 +8,9 @@ const env = Object.fromEntries(
 export const config = {
   port: Number(env.PORT || 3000),
   botName: env.BOT_NAME || 'Meu Assistente',
+  // Endereço público do servidor (o Render preenche RENDER_EXTERNAL_URL sozinho)
+  publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, ''),
+  sessionSecret: env.SESSION_SECRET || '',
   currency: env.DEFAULT_CURRENCY || 'EUR',
   timezone: env.DEFAULT_TIMEZONE || 'Europe/Lisbon',
   allowedNumbers: (env.ALLOWED_NUMBERS || '')

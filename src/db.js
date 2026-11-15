@@ -96,6 +96,21 @@ export function createDb(pool) {
       return del.rows;
     },
 
+    async getUserById(id) {
+      return (await q('SELECT * FROM users WHERE id = $1', [id])).rows[0] || null;
+    },
+
+    // Lançamentos entre duas datas (inclusive), do mais recente para o mais antigo.
+    async range(userId, from, to) {
+      const r = await q(
+        `SELECT * FROM transactions
+          WHERE user_id = $1 AND occurred_on >= $2 AND occurred_on <= $3
+          ORDER BY occurred_on DESC, id DESC`,
+        [userId, from, to],
+      );
+      return r.rows;
+    },
+
     // Últimos lançamentos do utilizador, do mais recente para o mais antigo.
     async recent(userId, limit = 10) {
       const r = await q(

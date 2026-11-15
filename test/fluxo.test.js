@@ -207,3 +207,86 @@ test('listar, apagar e corrigir um lançamento específico', async () => {
   assert.match(t.sent[6], /Despesas: 122,00/);
   t.close();
 });
+
+test('painel: link assinado, sessão, dados só do próprio utilizador', async () => {
+  const { createAuth } = await import('../src/auth.js');
+  const { createPainel, buildMonthData } = await import('../src/painel.js');
+  const { default: express } = await import('express');
+  const { Pool } = newDb().adapters.createPg();
+  const db = createDb(new Pool());
+  await db.migrate();
+  const a = await db.getOrCreateUser('351911111111', 'Davi', { currency: 'EUR', timezone: 'Europe/Lisbon' });
+  const b = await db.getOrCreateUser('351922222222', 'Outro', { currency: 'EUR', timezone: 'Europe/Lisbon' });
+  await db.addTransactions(a.id, [
+    { type: 'despesa', amountCents: 12000, category: 'Mercado', description: 'Mercado', date: TODAY },
+    { type: 'receita', amountCents: 90000, category: 'Trabalho', description: 'Cliente', date: TODAY },
+  ], 'text', 'm1');
+  await db.addTransactions(b.id, [{ type: 'despesa', amountCents: 777, category: 'Lazer', description: 'Segredo', date: TODAY }], 'text', 'm2');
+
+  const auth = createAuth('segredo');
+  const app = express();
+  app.use('/painel', createPainel({ db, auth, botName: 'Teste' }));
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const get = (path, cookie) => fetch(base + path, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+
+  // sem sessão
+  assert.equal((await get('/painel/dados')).status, 401);
+  assert.match(await (await get('/painel')).text(), /envie <strong>painel<\/strong>/);
+  // tokens inválidos, expirados ou do tipo errado
+  assert.equal((await get('/painel/entrar?t=lixo')).status, 401);
+  assert.equal((await get(`/painel/entrar?t=${auth.sign(a.id, 'login', -10)}`)).status, 401);
+  assert.equal((await get(`/painel/entrar?t=${auth.sign(a.id, 'sessao', 600)}`)).status, 401);
+  assert.equal((await get(`/painel/entrar?t=${createAuth('outro').sign(a.id, 'login', 600)}`)).status, 401);
+  // um token de login não serve de cookie
+  assert.equal((await get('/painel/dados', `sessao=${auth.sign(a.id, 'login', 600)}`)).status, 401);
+
+  // login válido
+  const login = await get(`/painel/entrar?t=${auth.sign(a.id, 'login', 600)}`);
+  assert.equal(login.status, 302);
+  const setCookie = login.headers.get('set-cookie');
+  assert.match(setCookie, /HttpOnly; Secure; SameSite=Lax/);
+  const cookie = setCookie.split(';')[0];
+
+  const data = await (await get('/painel/dados', cookie)).json();
+  assert.equal(data.totals.expenses, 12000);
+  assert.equal(data.totals.income, 90000);
+  assert.equal(data.months.length, 6);
+  assert.equal(data.months[5].expenses, 12000);
+  assert.equal(data.daily[Number(TODAY.slice(8)) - 1].cents, 12000);
+  assert.ok(!JSON.stringify(data).includes('Segredo'));
+  const html = await (await get('/painel', cookie)).text();
+  assert.match(html, /painel\.js/);
+  assert.equal((await get('/painel/static/painel.js')).status, 200);
+  assert.equal((await get('/painel/dados?mes=2020-13', cookie)).status, 200); // mês inválido cai no atual
+
+  // agregação de meses
+  const agg = buildMonthData([
+    { occurred_on: '2026-01-31', type: 'despesa', amount_cents: 100, category: 'A', description: 'x' },
+    { occurred_on: '2025-12-05', type: 'despesa', amount_cents: 50, category: 'B', description: 'y' },
+  ], '2026-01');
+  assert.equal(agg.daily.length, 31);
+  assert.deepEqual(agg.months.map((m) => m.month), ['2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01']);
+  assert.equal(agg.months[4].expenses, 50);
+  server.close(); server.closeAllConnections();
+});
+
+test('"painel" no WhatsApp devolve um link pessoal válido', async () => {
+  const { createAuth } = await import('../src/auth.js');
+  const { Pool } = newDb().adapters.createPg();
+  const db = createDb(new Pool());
+  await db.migrate();
+  const auth = createAuth('s');
+  const sent = [];
+  const handler = createHandler({
+    db, auth,
+    wa: { sendText: async (_to, t) => sent.push(t), markRead: async () => {} },
+    ai: { interpret: async () => { throw new Error('não devia chamar a IA'); } },
+    config: { botName: 'T', currency: 'EUR', timezone: 'Europe/Lisbon', allowedNumbers: [], publicUrl: 'https://exemplo.pt' },
+    log: { warn() {}, error() {}, info() {} },
+  });
+  await handler.handle({ from: '351911111111', id: 'w1', type: 'text', text: { body: 'Painel' } }, 'Davi');
+  const token = sent[0].match(/https:\/\/exemplo\.pt\/painel\/entrar\?t=(\S+)/)[1];
+  const user = await db.getOrCreateUser('351911111111', 'Davi', { currency: 'EUR', timezone: 'Europe/Lisbon' });
+  assert.equal(auth.verify(token, 'login'), user.id);
+});

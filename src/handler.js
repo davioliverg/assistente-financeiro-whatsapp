@@ -4,7 +4,7 @@ import { confirmText, fold, helpText, listText, money, rowLine, summaryText, tod
 const MEDIA_TYPES = { audio: 'áudio', image: 'foto', document: 'documento' };
 const DOCUMENT_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-export function createHandler({ db, wa, ai, config, log = console }) {
+export function createHandler({ db, wa, ai, config, auth = null, log = console }) {
   async function handle(message, contactName) {
     const phone = message.from;
 
@@ -33,6 +33,11 @@ export function createHandler({ db, wa, ai, config, log = console }) {
       const plain = (input.text || '').trim().toLowerCase();
       if (!input.media && /^\/?(ajuda|help|menu|oi|olá|ola)[.!?]*$/.test(plain)) {
         await reply(helpText(config.botName));
+        return;
+      }
+
+      if (!input.media && /^\/?(painel|dashboard|gr[aá]ficos|relat[oó]rio)[.!?]*$/.test(plain)) {
+        await reply(panelLink(user));
         return;
       }
 
@@ -73,6 +78,8 @@ export function createHandler({ db, wa, ai, config, log = console }) {
           const updated = await db.updateById(user.id, matches[0].id, { ...matches[0], ...result.changes });
           await reply(`✏️ Corrigido:\n${rowLine(updated, user.currency)}${othersNote(matches)}`);
         }
+      } else if (result.intent === 'painel') {
+        await reply(panelLink(user));
       } else if (result.intent === 'ajuda') {
         await reply(helpText(config.botName));
       } else {
@@ -93,6 +100,13 @@ export function createHandler({ db, wa, ai, config, log = console }) {
             : 'Tive um problema a processar a sua mensagem. Nada foi anotado — tente de novo daqui a pouco.',
       ).catch(() => {});
     }
+  }
+
+  // Link pessoal e temporário para o painel web.
+  function panelLink(user) {
+    if (!auth || !config.publicUrl) return 'O painel web ainda não está configurado neste servidor.';
+    const token = auth.sign(user.id, 'login', 15 * 60);
+    return `📊 O seu painel:\n${config.publicUrl}/painel/entrar?t=${token}\n\nO link é pessoal e vale 15 minutos. Não o partilhe.`;
   }
 
   // Lançamentos (do mais recente para o mais antigo) que batem com a descrição e/ou o valor.

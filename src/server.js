@@ -4,7 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { config } from './config.js';
 import { createAi } from './ai.js';
 import { createDb, createPool } from './db.js';
+import { createAuth, deriveSecret } from './auth.js';
 import { createHandler } from './handler.js';
+import { createPainel } from './painel.js';
 import { createWhatsApp } from './whatsapp.js';
 
 export function validSignature(rawBody, header, appSecret) {
@@ -15,8 +17,10 @@ export function validSignature(rawBody, header, appSecret) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-export function createApp({ handler, whatsappConfig, log = console }) {
+export function createApp({ handler, whatsappConfig, painel = null, log = console }) {
   const app = express();
+  app.disable('x-powered-by');
+  if (painel) app.use('/painel', painel);
   app.use(
     express.json({
       limit: '3mb',
@@ -158,14 +162,19 @@ async function main() {
 
   const db = createDb(createPool(config.database));
   await db.migrate();
+  const auth = createAuth(
+    config.sessionSecret || deriveSecret(config.whatsapp.appSecret, config.whatsapp.verifyToken),
+  );
   const handler = createHandler({
     db,
+    auth,
     wa: createWhatsApp(config.whatsapp),
     ai: createAi(config.gemini),
     config,
   });
   await subscribeApp();
-  createApp({ handler, whatsappConfig: config.whatsapp }).listen(config.port, () => {
+  const painel = createPainel({ db, auth, botName: config.botName });
+  createApp({ handler, whatsappConfig: config.whatsapp, painel }).listen(config.port, () => {
     console.log(`${config.botName} a ouvir na porta ${config.port}`);
   });
 }

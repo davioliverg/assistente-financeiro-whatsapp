@@ -28,6 +28,8 @@ export function helpText(botName) {
     '• _resumo da semana_',
     '• _quanto gastei em transporte em outubro?_',
     '',
+    '*Painel com gráficos*: mande _painel_',
+    '',
     '*Para ver ou corrigir*:',
     '• _mostra os últimos gastos_',
     '• _apagar último_ · _apagar o uber_',
