@@ -113,8 +113,24 @@ export function parseJson(text) {
   }
 }
 
-export function createAi({ apiKey, model }, fetchImpl = fetch) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+export function createAi({ apiKey, model }, fetchImpl = fetch, log = console) {
+  // GEMINI_MODEL aceita vários modelos separados por vírgula: tenta-os por ordem
+  // e passa ao seguinte se um demorar demais ou der erro.
+  const models = String(model).split(',').map((m) => m.trim()).filter(Boolean);
+  const TIMEOUT_MS = 25_000;
+
+  async function call(modelName, body) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+    const res = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(TIMEOUT_MS), // não ficar à espera para sempre
+      body,
+    });
+    if (!res.ok) throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    const data = await res.json();
+    return (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+  }
 
   return {
     // input: { text?, media?: { buffer, mimeType } }   ctx: { today, weekday, currency }
@@ -126,21 +142,25 @@ export function createAi({ apiKey, model }, fetchImpl = fetch) {
         });
       }
       parts.push({ text: input.text || '(sem texto; interprete o anexo)' });
-
-      const res = await fetchImpl(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        signal: AbortSignal.timeout(45_000), // não ficar à espera para sempre
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt(ctx) }] },
-          contents: [{ role: 'user', parts }],
-          generation_config: { response_mime_type: 'application/json', temperature: 0 },
-        }),
+      const body = JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt(ctx) }] },
+        contents: [{ role: 'user', parts }],
+        generation_config: { response_mime_type: 'application/json', temperature: 0 },
       });
-      if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
-      return normalize(parseJson(text), ctx.today);
+
+      let lastError;
+      for (const modelName of models) {
+        const started = Date.now();
+        try {
+          const text = await call(modelName, body);
+          log.info?.(`IA (${modelName}) respondeu em ${Date.now() - started} ms`);
+          return normalize(parseJson(text), ctx.today);
+        } catch (err) {
+          lastError = err;
+          log.warn?.(`IA (${modelName}) falhou após ${Date.now() - started} ms: ${err.name}: ${err.message}`);
+        }
+      }
+      throw lastError;
     },
   };
 }

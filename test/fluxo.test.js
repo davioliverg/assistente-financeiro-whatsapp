@@ -47,7 +47,7 @@ async function setup(aiAnswers) {
   const handler = createHandler({
     db,
     wa: createWhatsApp(waConfig, fakeFetch),
-    ai: createAi({ apiKey: 'k', model: 'm' }, fakeFetch),
+    ai: createAi({ apiKey: 'k', model: 'm' }, fakeFetch, {}),
     config,
     log: { warn() {}, error() {}, info() {} },
   });

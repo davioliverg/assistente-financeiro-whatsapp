@@ -18,7 +18,7 @@ services:
       - key: WEBHOOK_VERIFY_TOKEN
         generateValue: true
       - key: GEMINI_MODEL
-        value: gemini-3.8-flash
+        value: gemini-3.5-flash-lite,gemini-3.6-flash
       - key: GRAPH_API_VERSION
         value: v25.0
       - key: DEFAULT_CURRENCY
