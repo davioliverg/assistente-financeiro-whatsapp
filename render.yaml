@@ -1,0 +1,35 @@
+# Blueprint opcional para o Render (https://render.com): cria o serviço web + Postgres.
+services:
+  - type: web
+    name: assistente-financeiro-whatsapp
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: assistente-financeiro-db
+          property: connectionString
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: ALLOWED_NUMBERS
+        sync: false
+      - key: DEFAULT_CURRENCY
+        value: EUR
+      - key: DEFAULT_TIMEZONE
+        value: Europe/Lisbon
+databases:
+  - name: assistente-financeiro-db
+    plan: free

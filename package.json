@@ -1,0 +1,21 @@
+{
+  "name": "assistente-financeiro-whatsapp",
+  "version": "0.1.0",
+  "description": "Assistente financeiro pessoal no WhatsApp (texto, áudio e fotos de recibos) com IA",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-force-exit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5"
+  }
+}
