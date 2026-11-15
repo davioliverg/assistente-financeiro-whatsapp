@@ -51,21 +51,23 @@
     return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
   }
 
-  // Escala "redonda": 3 linhas de grelha entre 0 e o máximo.
-  function niceMax(v) {
-    if (v <= 0) return 100;
-    const pow = 10 ** Math.floor(Math.log10(v));
-    for (const m of [1, 1.5, 2, 3, 4, 5, 6, 8, 10]) if (m * pow >= v) return m * pow;
-    return 10 * pow;
+  // Escala "redonda": passo de 1, 2, 2,5 ou 5 (×10ⁿ) e 2 a 4 linhas de grelha, sem números quebrados.
+  function niceScale(v) {
+    if (v <= 0) return { max: 100, steps: 2 };
+    const raw = v / 3;
+    const pow = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((x) => x >= raw);
+    const steps = Math.max(Math.ceil(v / step), 2);
+    return { max: step * steps, steps };
   }
 
-  function frame(W, H, pad, max) {
+  function frame(W, H, pad, scale) {
     const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img' });
     const plotH = H - pad.top - pad.bottom;
-    for (let i = 0; i <= 3; i++) {
-      const y = pad.top + plotH - (plotH * i) / 3;
+    for (let i = 0; i <= scale.steps; i++) {
+      const y = pad.top + plotH - (plotH * i) / scale.steps;
       root.append(svg('line', { class: 'gridline', x1: pad.left, x2: W - pad.right, y1: y, y2: y }));
-      root.append(svg('text', { class: 'axis', x: pad.left - 6, y: y + 4, 'text-anchor': 'end' }, compact((max * i) / 3)));
+      root.append(svg('text', { class: 'axis', x: pad.left - 6, y: y + 4, 'text-anchor': 'end' }, compact((scale.max * i) / scale.steps)));
     }
     return { root, plotH };
   }
@@ -112,8 +114,9 @@
     const box = $('daily');
     if (!d.totals.expenses) return box.replaceChildren(el('p', { class: 'empty' }, 'Sem despesas neste mês.'));
     const W = Math.max(box.clientWidth, 260), H = 200, pad = { top: 10, right: 6, bottom: 22, left: 40 };
-    const max = niceMax(Math.max(...d.daily.map((x) => x.cents)));
-    const { root, plotH } = frame(W, H, pad, max);
+    const scale = niceScale(Math.max(...d.daily.map((x) => x.cents)));
+    const max = scale.max;
+    const { root, plotH } = frame(W, H, pad, scale);
     root.setAttribute('aria-label', 'Despesas por dia do mês');
     const slot = (W - pad.left - pad.right) / d.daily.length;
     const bw = Math.max(slot - 2, 3);
@@ -138,8 +141,9 @@
     const W = Math.max(box.clientWidth, 260), H = 220, pad = { top: 10, right: 6, bottom: 24, left: 44 };
     const top = Math.max(...d.months.map((m) => Math.max(m.expenses, m.income)));
     if (!top) return box.replaceChildren(el('p', { class: 'empty' }, 'Ainda não há lançamentos.'));
-    const max = niceMax(top);
-    const { root, plotH } = frame(W, H, pad, max);
+    const scale = niceScale(top);
+    const max = scale.max;
+    const { root, plotH } = frame(W, H, pad, scale);
     root.setAttribute('aria-label', 'Despesas e receitas dos últimos seis meses');
     const slot = (W - pad.left - pad.right) / d.months.length;
     const bw = Math.max(Math.min(34, (slot - 14) / 2), 6);
