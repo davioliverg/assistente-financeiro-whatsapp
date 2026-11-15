@@ -105,6 +105,24 @@ export function createApp({ handler, whatsappConfig, log = console }) {
   return app;
 }
 
+// Associa a conta WhatsApp Business a esta app, para a Meta enviar as mensagens ao webhook.
+// É seguro repetir a cada arranque.
+async function subscribeApp() {
+  const { token, businessAccountId, graphVersion } = config.whatsapp;
+  if (!token || !businessAccountId) return;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${graphVersion}/${businessAccountId}/subscribed_apps`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+    );
+    const body = await res.text();
+    if (res.ok) console.log(`Conta WhatsApp associada à app para webhooks: ${body}`);
+    else console.warn(`AVISO: não foi possível associar a conta WhatsApp à app (${res.status}): ${body}`);
+  } catch (err) {
+    console.warn(`AVISO: falha ao associar a conta WhatsApp à app: ${err.message}`);
+  }
+}
+
 async function main() {
   // Sem base de dados ou token de verificação o servidor não tem como funcionar.
   const required = [
@@ -146,6 +164,7 @@ async function main() {
     ai: createAi(config.gemini),
     config,
   });
+  await subscribeApp();
   createApp({ handler, whatsappConfig: config.whatsapp }).listen(config.port, () => {
     console.log(`${config.botName} a ouvir na porta ${config.port}`);
   });

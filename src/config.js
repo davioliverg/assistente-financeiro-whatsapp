@@ -17,6 +17,7 @@ export const config = {
   whatsapp: {
     token: env.WHATSAPP_TOKEN || '',
     phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || '',
+    businessAccountId: env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
     verifyToken: env.WEBHOOK_VERIFY_TOKEN || '',
     appSecret: env.META_APP_SECRET || '',
     graphVersion: env.GRAPH_API_VERSION || 'v25.0',
