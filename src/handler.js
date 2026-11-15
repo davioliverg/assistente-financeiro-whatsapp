@@ -10,7 +10,7 @@ export function createHandler({ db, wa, ai, config, log = console }) {
 
     // Fase pessoal: só os números autorizados são atendidos.
     if (config.allowedNumbers.length && !config.allowedNumbers.includes(phone)) {
-      log.warn(`Mensagem ignorada de número não autorizado: ${phone}`);
+      log.warn(`Mensagem ignorada de número não autorizado: ...${String(phone).slice(-4)}`);
       return;
     }
     if (!(await db.markProcessed(message.id))) return; // reenvio da Meta

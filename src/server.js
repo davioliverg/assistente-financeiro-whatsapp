@@ -73,7 +73,10 @@ export function createApp({ handler, whatsappConfig, log = console }) {
   app.post('/webhook', (req, res) => {
     if (whatsappConfig.appSecret) {
       const sig = req.get('x-hub-signature-256');
-      if (!validSignature(req.rawBody, sig, whatsappConfig.appSecret)) return res.sendStatus(401);
+      if (!validSignature(req.rawBody, sig, whatsappConfig.appSecret)) {
+        log.warn('Webhook rejeitado: assinatura inválida (confirme o META_APP_SECRET).');
+        return res.sendStatus(401);
+      }
     }
     res.sendStatus(200); // responde já; a Meta reenvia se demorarmos
 
@@ -95,6 +98,7 @@ export function createApp({ handler, whatsappConfig, log = console }) {
         }
       }
     }
+    log.info(`Webhook recebido: ${jobs.length} mensagem(ns).`);
     req.app.locals.lastJobs = Promise.all(jobs); // útil nos testes
   });
 

@@ -49,9 +49,9 @@ async function setup(aiAnswers) {
     wa: createWhatsApp(waConfig, fakeFetch),
     ai: createAi({ apiKey: 'k', model: 'm' }, fakeFetch),
     config,
-    log: { warn() {}, error() {} },
+    log: { warn() {}, error() {}, info() {} },
   });
-  const app = createApp({ handler, whatsappConfig: waConfig, log: { error() {} } });
+  const app = createApp({ handler, whatsappConfig: waConfig, log: { error() {}, warn() {}, info() {} } });
   const server = app.listen(0);
   const base = `http://127.0.0.1:${server.address().port}`;
 
