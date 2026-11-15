@@ -176,3 +176,34 @@ test('normalize descarta valores inválidos e corrige campos', () => {
   assert.equal(normalize(null, '2026-11-15').intent, 'outro');
   assert.deepEqual(parseJson('```json\n{"a":1}\n```'), { a: 1 });
 });
+
+test('listar, apagar e corrigir um lançamento específico', async () => {
+  const t = await setup([
+    { intencao: 'registar', lancamentos: [
+      { tipo: 'despesa', valor: 120, descricao: 'Mercado', categoria: 'Mercado', data: TODAY },
+      { tipo: 'despesa', valor: 8.5, descricao: 'Uber', categoria: 'Transporte', data: TODAY },
+      { tipo: 'despesa', valor: 12, descricao: 'Uber', categoria: 'Transporte', data: TODAY },
+    ] },
+    { intencao: 'listar' },
+    { intencao: 'apagar', alvo: { descricao: 'ÚBER', valor: 8.5 } },
+    { intencao: 'corrigir', alvo: { descricao: 'mercado', valor: null }, alteracoes: { valor: '110', categoria: null } },
+    { intencao: 'apagar', alvo: { descricao: 'farmácia', valor: null } },
+    { intencao: 'corrigir', alvo: { descricao: 'uber' }, alteracoes: {} },
+    { intencao: 'consultar', consulta: { inicio: `${TODAY.slice(0, 8)}01`, fim: TODAY, rotulo: 'este mês' } },
+  ]);
+  await t.receive(t.text('mercado 120, uber 8,50, uber 12'));
+  await t.receive(t.text('mostra os últimos gastos'));
+  assert.match(t.sent[1], /Últimos 3 lançamentos/);
+  await t.receive(t.text('apagar o uber de 8,50'));
+  assert.match(t.sent[2], /Apagado:[\s\S]*Uber: 8,50/);
+  assert.doesNotMatch(t.sent[2], /parecidos/);
+  await t.receive(t.text('corrige o mercado para 110'));
+  assert.match(t.sent[3], /Corrigido:[\s\S]*Mercado: 110,00.*\(Mercado\)/);
+  await t.receive(t.text('apagar a farmácia'));
+  assert.match(t.sent[4], /Não encontrei/);
+  await t.receive(t.text('corrige o uber'));
+  assert.match(t.sent[5], /Não percebi o que quer alterar/);
+  await t.receive(t.text('quanto gastei?'));
+  assert.match(t.sent[6], /Despesas: 122,00/);
+  t.close();
+});

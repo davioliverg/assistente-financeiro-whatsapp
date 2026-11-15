@@ -1,5 +1,5 @@
 // Lógica principal: recebe uma mensagem do WhatsApp e decide o que responder.
-import { confirmText, helpText, money, summaryText, todayIn } from './format.js';
+import { confirmText, fold, helpText, listText, money, rowLine, summaryText, todayIn } from './format.js';
 
 const MEDIA_TYPES = { audio: 'áudio', image: 'foto', document: 'documento' };
 const DOCUMENT_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -60,6 +60,19 @@ export function createHandler({ db, wa, ai, config, log = console }) {
                 .join(', ')}`
             : 'Não há nenhum lançamento para apagar.',
         );
+      } else if (result.intent === 'listar') {
+        await reply(listText(await db.recent(user.id, 10), user.currency));
+      } else if (result.intent === 'apagar' || result.intent === 'corrigir') {
+        const matches = findMatches(await db.recent(user.id, 200), result.target);
+        if (matches.length === 0) {
+          await reply('Não encontrei nenhum lançamento assim. Mande _mostra os últimos gastos_ para ver a lista.');
+        } else if (result.intent === 'apagar') {
+          const removed = await db.deleteById(user.id, matches[0].id);
+          await reply(`🗑️ Apagado:\n${rowLine(removed, user.currency)}${othersNote(matches)}`);
+        } else {
+          const updated = await db.updateById(user.id, matches[0].id, { ...matches[0], ...result.changes });
+          await reply(`✏️ Corrigido:\n${rowLine(updated, user.currency)}${othersNote(matches)}`);
+        }
       } else if (result.intent === 'ajuda') {
         await reply(helpText(config.botName));
       } else {
@@ -80,6 +93,22 @@ export function createHandler({ db, wa, ai, config, log = console }) {
             : 'Tive um problema a processar a sua mensagem. Nada foi anotado — tente de novo daqui a pouco.',
       ).catch(() => {});
     }
+  }
+
+  // Lançamentos (do mais recente para o mais antigo) que batem com a descrição e/ou o valor.
+  function findMatches(rows, target) {
+    const needle = fold(target.text);
+    return rows.filter((r) => {
+      const textOk = !needle || fold(r.description).includes(needle) || fold(r.category).includes(needle);
+      const amountOk = target.amountCents === null || r.amount_cents === target.amountCents;
+      return textOk && amountOk;
+    });
+  }
+
+  function othersNote(matches) {
+    return matches.length > 1
+      ? `\n\nHavia ${matches.length} lançamentos parecidos; mexi no mais recente.`
+      : '';
   }
 
   async function buildInput(message) {

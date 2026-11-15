@@ -96,6 +96,30 @@ export function createDb(pool) {
       return del.rows;
     },
 
+    // Últimos lançamentos do utilizador, do mais recente para o mais antigo.
+    async recent(userId, limit = 10) {
+      const r = await q(
+        'SELECT * FROM transactions WHERE user_id = $1 ORDER BY id DESC LIMIT $2',
+        [userId, limit],
+      );
+      return r.rows;
+    },
+
+    async deleteById(userId, id) {
+      const r = await q('DELETE FROM transactions WHERE user_id = $1 AND id = $2 RETURNING *', [userId, id]);
+      return r.rows[0] || null;
+    },
+
+    async updateById(userId, id, f) {
+      const r = await q(
+        `UPDATE transactions
+            SET amount_cents = $3, category = $4, description = $5, occurred_on = $6, type = $7
+          WHERE user_id = $1 AND id = $2 RETURNING *`,
+        [userId, id, f.amount_cents, f.category, f.description, f.occurred_on, f.type],
+      );
+      return r.rows[0] || null;
+    },
+
     // As somas são feitas aqui, em SQL — nunca pela IA.
     async summary(userId, from, to) {
       const r = await q(

@@ -28,7 +28,10 @@ export function helpText(botName) {
     '• _resumo da semana_',
     '• _quanto gastei em transporte em outubro?_',
     '',
-    '*Errou?* Mande _apagar último_.',
+    '*Para ver ou corrigir*:',
+    '• _mostra os últimos gastos_',
+    '• _apagar último_ · _apagar o uber_',
+    '• _corrige o mercado para 110_',
   ].join('\n');
 }
 
@@ -73,4 +76,19 @@ export function summaryText(rows, query, currency) {
     out.push('', `*Saldo: ${money(income - expenses, currency)}*`);
   }
   return out.join('\n');
+}
+
+export function rowLine(r, currency) {
+  const icon = r.type === 'receita' ? '💰' : '•';
+  return `${icon} ${shortDate(r.occurred_on)} — ${r.description}: ${money(r.amount_cents, currency)} (${r.category})`;
+}
+
+export function listText(rows, currency) {
+  if (rows.length === 0) return 'Ainda não há lançamentos anotados.';
+  return [`🧾 *Últimos ${rows.length} lançamentos*`, '', ...rows.map((r) => rowLine(r, currency))].join('\n');
+}
+
+// Comparação sem acentos nem maiúsculas.
+export function fold(text) {
+  return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }

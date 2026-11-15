@@ -17,7 +17,7 @@ WhatsApp ──► Meta Cloud API ──► POST /webhook (este servidor)
 - **Áudio**: nota de voz a dizer o gasto.
 - **Foto / PDF de recibo**: regista o total, a loja e a data.
 - **Resumos**: `quanto gastei este mês?`, `resumo da semana`, `quanto gastei em transporte em outubro?`.
-- **Desfazer**: `apagar último`.
+- **Ver, apagar e corrigir**: `mostra os últimos gastos`, `apagar último`, `apagar o uber`, `corrige o mercado para 110`.
 - **Pronto para vários utilizadores**: cada número de telefone tem os seus dados separados.
   Enquanto for só seu, `ALLOWED_NUMBERS` bloqueia todos os outros números.
 
