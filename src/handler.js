@@ -37,7 +37,9 @@ export function createHandler({ db, wa, ai, config, log = console }) {
       }
 
       const { today, weekday } = todayIn(user.timezone);
+      const started = Date.now();
       const result = await ai.interpret(input, { today, weekday, currency: user.currency });
+      log.info?.(`IA respondeu em ${Date.now() - started} ms: ${result.intent}`);
 
       if (result.intent === 'registar') {
         await db.addTransactions(user.id, result.items, message.type, message.id);
@@ -69,10 +71,13 @@ export function createHandler({ db, wa, ai, config, log = console }) {
     } catch (err) {
       log.error('Erro ao tratar mensagem', err);
       const tooBig = err.message === 'MEDIA_TOO_LARGE';
+      const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError';
       await reply(
         tooBig
           ? 'Esse ficheiro é grande demais. Mande um áudio mais curto ou uma foto mais leve.'
-          : 'Tive um problema a processar a sua mensagem. Nada foi anotado — tente de novo daqui a pouco.',
+          : timedOut
+            ? 'A IA demorou demais a responder. Nada foi anotado — tente de novo daqui a pouco.'
+            : 'Tive um problema a processar a sua mensagem. Nada foi anotado — tente de novo daqui a pouco.',
       ).catch(() => {});
     }
   }

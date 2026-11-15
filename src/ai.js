@@ -130,6 +130,7 @@ export function createAi({ apiKey, model }, fetchImpl = fetch) {
       const res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        signal: AbortSignal.timeout(45_000), // não ficar à espera para sempre
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt(ctx) }] },
           contents: [{ role: 'user', parts }],
