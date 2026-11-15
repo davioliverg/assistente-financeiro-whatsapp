@@ -127,6 +127,13 @@ async function main() {
   if (!config.whatsapp.appSecret) {
     console.warn('AVISO: META_APP_SECRET vazio — o webhook aceita pedidos sem validar a assinatura.');
   }
+  if (config.whatsapp.appSecret && !/^[0-9a-f]{32}$/i.test(config.whatsapp.appSecret)) {
+    const s = config.whatsapp.appSecret;
+    console.warn(
+      `AVISO: META_APP_SECRET não tem o formato esperado (32 caracteres de 0-9 e a-f). ` +
+        `Tem ${s.length} caracteres${/^\d+$/.test(s) ? ' e é só números: parece ser o App ID, não o App secret' : ''}.`,
+    );
+  }
   if (!config.allowedNumbers.length) {
     console.warn('AVISO: ALLOWED_NUMBERS vazio — qualquer pessoa pode usar o bot.');
   }

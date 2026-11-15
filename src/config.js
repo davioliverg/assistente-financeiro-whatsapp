@@ -1,6 +1,9 @@
 import 'dotenv/config';
 
-const env = process.env;
+// Remove espaços e quebras de linha coladas por engano ao copiar as chaves.
+const env = Object.fromEntries(
+  Object.entries(process.env).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]),
+);
 
 export const config = {
   port: Number(env.PORT || 3000),
