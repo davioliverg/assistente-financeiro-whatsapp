@@ -290,3 +290,77 @@ test('"painel" no WhatsApp devolve um link pessoal válido', async () => {
   const user = await db.getOrCreateUser('351911111111', 'Davi', { currency: 'EUR', timezone: 'Europe/Lisbon' });
   assert.equal(auth.verify(token, 'login'), user.id);
 });
+
+test('gastos fixos: datas, lançamento mensal sem duplicar, cancelamento', async () => {
+  const { materialize, dueDate, firstMonth, nextDue } = await import('../src/recurring.js');
+  assert.equal(dueDate('2026-02', 31), '2026-02-28');
+  assert.equal(dueDate('2028-02', 30), '2028-02-29');
+  assert.equal(firstMonth('2026-11-16', 16), '2026-11'); // vence hoje: conta este mês
+  assert.equal(firstMonth('2026-11-16', 5), '2026-12');  // já passou: começa no próximo
+  assert.equal(firstMonth('2026-12-20', 5), '2027-01');
+  assert.equal(firstMonth('2026-02-28', 31), '2026-02'); // dia 31 em fevereiro vence a 28
+
+  const { Pool } = newDb().adapters.createPg();
+  const db = createDb(new Pool());
+  await db.migrate();
+  const u = await db.getOrCreateUser('1', 'A', { currency: 'EUR', timezone: 'Europe/Lisbon' });
+  const other = await db.getOrCreateUser('2', 'B', { currency: 'EUR', timezone: 'Europe/Lisbon' });
+  const rec = await db.addRecurring(u.id, { type: 'despesa', amountCents: 1399, category: 'Assinaturas', description: 'Netflix', day: 31, startMonth: '2026-01' });
+  assert.equal(nextDue(rec, '2026-01-10'), '2026-01-31');
+
+  assert.equal((await materialize(db, u.id, '2026-01-30')).length, 0); // ainda não venceu
+  const jan = await materialize(db, u.id, '2026-01-31');
+  assert.equal(jan.length, 1);
+  assert.equal(jan[0].occurred_on, '2026-01-31');
+  assert.equal(jan[0].source, 'fixo');
+  assert.equal((await materialize(db, u.id, '2026-01-31')).length, 0); // repetir não duplica
+  // duas chamadas ao mesmo tempo também não
+  const both = await Promise.all([materialize(db, u.id, '2026-02-28'), materialize(db, u.id, '2026-02-28')]);
+  assert.equal(both[0].length + both[1].length, 1);
+  // volta ao fim de 3 meses: recupera março, abril e maio, com fevereiro a 28
+  const catchUp = await materialize(db, u.id, '2026-05-31');
+  assert.deepEqual(catchUp.map((t) => t.occurred_on), ['2026-03-31', '2026-04-30', '2026-05-31']);
+  assert.equal((await db.range(u.id, '2026-02-01', '2026-02-31'))[0].occurred_on, '2026-02-28');
+  assert.equal(nextDue((await db.listRecurring(u.id))[0], '2026-06-01'), '2026-06-30');
+
+  // outro utilizador não vê nem cancela
+  assert.equal((await db.listRecurring(other.id)).length, 0);
+  assert.equal(await db.cancelRecurring(other.id, rec.id), null);
+  assert.equal((await materialize(db, other.id, '2026-12-31')).length, 0);
+
+  // cancelado deixa de lançar; o histórico fica
+  assert.ok(await db.cancelRecurring(u.id, rec.id));
+  assert.equal((await materialize(db, u.id, '2026-12-31')).length, 0);
+  assert.equal((await db.range(u.id, '2026-01-01', '2026-12-31')).length, 5);
+});
+
+test('gastos fixos pelo WhatsApp: criar, listar, cancelar', async () => {
+  const day = Number(TODAY.slice(8));
+  const t = await setup([
+    { intencao: 'fixo_criar', fixo: { tipo: 'despesa', valor: '13,99', descricao: 'Netflix', categoria: 'Assinaturas', dia: day } },
+    { intencao: 'fixo_criar', fixo: { tipo: 'despesa', valor: 450, descricao: 'Renda', categoria: 'Casa', dia: null } },
+    { intencao: 'fixo_criar', fixo: { descricao: 'Ginásio' } },
+    { intencao: 'consultar', consulta: { inicio: `${TODAY.slice(0, 8)}01`, fim: TODAY, rotulo: 'este mês' } },
+    { intencao: 'fixo_apagar', alvo: { descricao: 'netflix' } },
+    { intencao: 'fixo_apagar', alvo: { descricao: 'spotify' } },
+  ]);
+  await t.receive(t.text('netflix 13,99 todo mês'));
+  assert.match(t.sent[0], /Fixo criado![\s\S]*Netflix: 13,99[\s\S]*hoje \(já anotado\)/);
+  await t.receive(t.text('renda 450 todo mês'));
+  assert.match(t.sent[1], new RegExp(`dia ${day} — Renda: 450,00`));
+  await t.receive(t.text('ginásio todo mês'));
+  assert.match(t.sent[2], /preciso do valor/);
+  await t.receive(t.text('quanto gastei?'));
+  assert.match(t.sent[3], /Despesas: 463,99/); // os dois fixos de hoje já contam
+  await t.receive(t.text('Meus gastos fixos'));
+  assert.match(t.sent[4], /Os seus fixos[\s\S]*Netflix[\s\S]*Renda[\s\S]*Despesas fixas por mês: 463,99/);
+  assert.equal(t.geminiRequests.length, 4); // a listagem é um atalho, sem IA
+  await t.receive(t.text('cancela o fixo da netflix'));
+  assert.match(t.sent[5], /Fixo cancelado:[\s\S]*Netflix/);
+  await t.receive(t.text('cancela o spotify'));
+  assert.match(t.sent[6], /Não encontrei nenhum fixo/);
+  await t.receive(t.text('fixos'));
+  assert.doesNotMatch(t.sent[7], /Netflix/);
+  assert.match(t.sent[7], /Renda/);
+  t.close();
+});

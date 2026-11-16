@@ -13,7 +13,7 @@ Recebe UMA mensagem do utilizador: texto, áudio (nota de voz) ou foto/PDF de um
 Responda APENAS com um objeto JSON, sem texto extra, neste formato:
 
 {
-  "intencao": "registar" | "consultar" | "listar" | "apagar_ultimo" | "apagar" | "corrigir" | "painel" | "ajuda" | "outro",
+  "intencao": "registar" | "consultar" | "listar" | "apagar_ultimo" | "apagar" | "corrigir" | "fixo_criar" | "fixo_listar" | "fixo_apagar" | "painel" | "ajuda" | "outro",
   "lancamentos": [
     { "tipo": "despesa" | "receita", "valor": 0.00, "descricao": "texto curto",
       "categoria": "uma das categorias", "data": "AAAA-MM-DD" }
@@ -21,6 +21,7 @@ Responda APENAS com um objeto JSON, sem texto extra, neste formato:
   "consulta": { "inicio": "AAAA-MM-DD", "fim": "AAAA-MM-DD",
                 "categoria": null, "tipo": null, "rotulo": "este mês" },
   "alvo": { "descricao": "palavra que identifica o lançamento", "valor": null },
+  "fixo": { "tipo": "despesa" | "receita", "valor": 0.00, "descricao": "texto curto", "categoria": "uma das categorias", "dia": null },
   "alteracoes": { "valor": null, "descricao": null, "categoria": null, "data": null, "tipo": null },
   "resposta": "frase curta para o utilizador, só quando intencao = outro"
 }
@@ -45,6 +46,13 @@ Regras:
 - "corrigir": alterar um lançamento existente ("corrige o mercado para 110", "o uber foi ontem",
   "muda a categoria da primor para Saúde"). Preencha "alvo" como em "apagar" e, em "alteracoes",
   apenas os campos que mudam; os restantes ficam null.
+- "fixo_criar": o utilizador define um gasto ou ganho que se REPETE todos os meses ("netflix 13,99 todo mês",
+  "renda 450 dia 1", "gasto fixo internet 35 dia 10", "salário 1200 todo dia 28", "mensalidade do ginásio 30").
+  Só use quando houver indicação clara de repetição mensal (todo mês, mensal, fixo, mensalidade, todo dia N);
+  sem isso é "registar". Preencha "fixo"; "dia" é o dia do mês (1 a 31) ou null se não for dito.
+- "fixo_listar": ver os gastos fixos ("quais são os meus fixos?", "lista de gastos fixos").
+- "fixo_apagar": cancelar um gasto fixo ("cancela o fixo da netflix", "remove a renda dos fixos").
+  Preencha "alvo" com a palavra-chave e/ou o valor.
 - "painel": o utilizador pede o painel, o site, o dashboard ou para ver gráficos ("manda o link do painel").
 - "ajuda": o utilizador pergunta o que você faz ou como usar.
 - "outro": qualquer outra coisa, ou quando falta o valor. Explique em "resposta" o que falta.
@@ -52,7 +60,7 @@ Regras:
 }
 
 export function normalize(raw, today) {
-  const out = { intent: 'outro', items: [], query: null, target: null, changes: null, reply: '' };
+  const out = { intent: 'outro', items: [], query: null, target: null, changes: null, recurring: null, reply: '' };
   if (!raw || typeof raw !== 'object') return out;
 
   const intents = {
@@ -61,6 +69,9 @@ export function normalize(raw, today) {
     apagar_ultimo: 'apagar_ultimo',
     listar: 'listar',
     painel: 'painel',
+    fixo_criar: 'fixo_criar',
+    fixo_listar: 'fixo_listar',
+    fixo_apagar: 'fixo_apagar',
     apagar: 'apagar',
     corrigir: 'corrigir',
     ajuda: 'ajuda',
@@ -83,15 +94,33 @@ export function normalize(raw, today) {
     if (out.items.length === 0) out.intent = 'outro';
   }
 
-  if (out.intent === 'apagar' || out.intent === 'corrigir') {
+  if (out.intent === 'apagar' || out.intent === 'corrigir' || out.intent === 'fixo_apagar') {
     const t = raw.alvo || {};
     const text = typeof t.descricao === 'string' ? t.descricao.trim().slice(0, 80) : '';
     const amountCents = toCents(t.valor);
     if (!text && amountCents === null) {
       out.intent = 'outro';
-      out.reply = out.reply || 'Diga-me qual lançamento, por exemplo _apagar o uber_ ou _corrige o mercado para 110_.';
+      out.reply = out.reply || 'Diga-me qual, por exemplo _apagar o uber_ ou _cancela o fixo da netflix_.';
     } else {
       out.target = { text, amountCents };
+    }
+  }
+
+  if (out.intent === 'fixo_criar') {
+    const f = raw.fixo || {};
+    const amountCents = toCents(f.valor);
+    const day = Number.isInteger(Number(f.dia)) && Number(f.dia) >= 1 && Number(f.dia) <= 31 ? Number(f.dia) : null;
+    if (amountCents === null) {
+      out.intent = 'outro';
+      out.reply = 'Para criar um gasto fixo preciso do valor. Exemplo: _netflix 13,99 todo mês dia 5_.';
+    } else {
+      out.recurring = {
+        type: f.tipo === 'receita' ? 'receita' : 'despesa',
+        amountCents,
+        description: String(f.descricao || 'Gasto fixo').slice(0, 80),
+        category: CATEGORIES.includes(f.categoria) ? f.categoria : 'Outros',
+        day,
+      };
     }
   }
 

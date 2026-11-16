@@ -18,6 +18,8 @@ WhatsApp ──► Meta Cloud API ──► POST /webhook (este servidor)
 - **Foto / PDF de recibo**: regista o total, a loja e a data.
 - **Resumos**: `quanto gastei este mês?`, `resumo da semana`, `quanto gastei em transporte em outubro?`.
 - **Ver, apagar e corrigir**: `mostra os últimos gastos`, `apagar último`, `apagar o uber`, `corrige o mercado para 110`.
+- **Gastos fixos**: `netflix 13,99 todo mês dia 5`, `renda 450 dia 1`, `salário 1200 todo dia 28`. São anotados
+  sozinhos no dia marcado, todos os meses. `meus gastos fixos` lista-os; `cancela o fixo da netflix` cancela.
 - **Painel web**: envie `painel` e o bot responde com um link pessoal (válido 15 minutos) para ver gráficos
   por categoria, por dia e dos últimos 6 meses, mais a lista de lançamentos. Sem palavra-passe.
 - **Pronto para vários utilizadores**: cada número de telefone tem os seus dados separados.
@@ -102,7 +104,7 @@ e gere um token com as permissões `whatsapp_business_messaging` e `whatsapp_bus
   dos clientes para treino (confirme os termos do plano gratuito do Gemini).
 - **Marca própria**: escolha um nome e identidade seus (`BOT_NAME`); não use o nome nem a imagem de produtos existentes.
 - **Ainda por construir**: pagamentos/assinaturas, limites por utilizador,
-  gastos fixos e parcelas, esvaziar `ALLOWED_NUMBERS` e criar um fluxo de registo.
+  parcelas, esvaziar `ALLOWED_NUMBERS` e criar um fluxo de registo.
 
 ## Estrutura
 
@@ -114,6 +116,7 @@ e gere um token com as permissões `whatsapp_business_messaging` e `whatsapp_bus
 | `src/whatsapp.js` | Enviar mensagens e descarregar áudio/fotos |
 | `src/db.js` | Tabelas e consultas (Postgres) |
 | `src/format.js` | Textos das respostas |
+| `src/recurring.js` | Gastos fixos: datas e lançamento mensal |
 | `src/auth.js` | Links e sessões assinados do painel |
 | `src/painel.js` | Rotas e dados do painel web |
 | `public/` | Página do painel (CSS e JavaScript) |

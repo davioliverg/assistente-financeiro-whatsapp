@@ -1,5 +1,8 @@
 // Lógica principal: recebe uma mensagem do WhatsApp e decide o que responder.
-import { confirmText, fold, helpText, listText, money, rowLine, summaryText, todayIn } from './format.js';
+import {
+  confirmText, fold, helpText, listText, money, recurringLine, recurringListText, rowLine, shortDate, summaryText, todayIn,
+} from './format.js';
+import { dueDate, firstMonth, materialize } from './recurring.js';
 
 const MEDIA_TYPES = { audio: 'áudio', image: 'foto', document: 'documento' };
 const DOCUMENT_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -23,6 +26,11 @@ export function createHandler({ db, wa, ai, config, auth = null, log = console }
     wa.markRead(message.id).catch(() => {});
 
     try {
+      // Lança os gastos fixos que venceram desde a última conversa.
+      const { today, weekday } = todayIn(user.timezone);
+      const posted = await materialize(db, user.id, today);
+      if (posted.length) log.info?.(`Fixos lançados: ${posted.length}`);
+
       const input = await buildInput(message);
       if (!input) {
         await reply('Por enquanto só entendo texto, áudio e fotos de recibos. 🙂');
@@ -36,12 +44,16 @@ export function createHandler({ db, wa, ai, config, auth = null, log = console }
         return;
       }
 
+      if (!input.media && /^\/?((meus |os meus )?(gastos )?fixos)[.!?]*$/.test(plain)) {
+        await reply(recurringListText(await db.listRecurring(user.id), user.currency));
+        return;
+      }
+
       if (!input.media && /^\/?(painel|dashboard|gr[aá]ficos|relat[oó]rio)[.!?]*$/.test(plain)) {
         await reply(panelLink(user));
         return;
       }
 
-      const { today, weekday } = todayIn(user.timezone);
       const started = Date.now();
       const result = await ai.interpret(input, { today, weekday, currency: user.currency });
       log.info?.(`IA respondeu em ${Date.now() - started} ms: ${result.intent}`);
@@ -77,6 +89,31 @@ export function createHandler({ db, wa, ai, config, auth = null, log = console }
         } else {
           const updated = await db.updateById(user.id, matches[0].id, { ...matches[0], ...result.changes });
           await reply(`✏️ Corrigido:\n${rowLine(updated, user.currency)}${othersNote(matches)}`);
+        }
+      } else if (result.intent === 'fixo_criar') {
+        const r = result.recurring;
+        const day = r.day || Number(today.slice(8, 10));
+        const startMonth = firstMonth(today, day);
+        const rec = await db.addRecurring(user.id, { ...r, day, startMonth });
+        await materialize(db, user.id, today); // se vence hoje, lança já
+        const first = dueDate(startMonth, day);
+        const when = first === today ? 'hoje (já anotado)' : shortDate(first);
+        const late = startMonth !== today.slice(0, 7)
+          ? `\n\nO dia ${day} deste mês já passou; se já pagou, anote à parte.`
+          : '';
+        await reply(`Fixo criado!\n${recurringLine(rec, user.currency)}\n\nPrimeiro lançamento: ${when}. Depois, todos os meses.${late}`);
+      } else if (result.intent === 'fixo_listar') {
+        await reply(recurringListText(await db.listRecurring(user.id), user.currency));
+      } else if (result.intent === 'fixo_apagar') {
+        const all = await db.listRecurring(user.id);
+        const matches = findMatches(all, result.target);
+        if (matches.length === 0) {
+          await reply('Não encontrei nenhum fixo assim. Mande _meus gastos fixos_ para ver a lista.');
+        } else if (matches.length > 1) {
+          await reply(`Há ${matches.length} fixos parecidos. Diga também o valor:\n${matches.map((m) => recurringLine(m, user.currency)).join('\n')}`);
+        } else {
+          const gone = await db.cancelRecurring(user.id, matches[0].id);
+          await reply(`🛑 Fixo cancelado:\n${recurringLine(gone, user.currency)}\n\nOs lançamentos já feitos continuam anotados.`);
         }
       } else if (result.intent === 'painel') {
         await reply(panelLink(user));

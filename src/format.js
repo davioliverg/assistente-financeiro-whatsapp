@@ -28,6 +28,10 @@ export function helpText(botName) {
     '• _resumo da semana_',
     '• _quanto gastei em transporte em outubro?_',
     '',
+    '*Gastos fixos* (lançados sozinhos todos os meses):',
+    '• _netflix 13,99 todo mês dia 5_',
+    '• _meus gastos fixos_ · _cancela o fixo da netflix_',
+    '',
     '*Painel com gráficos*: mande _painel_',
     '',
     '*Para ver ou corrigir*:',
@@ -81,7 +85,7 @@ export function summaryText(rows, query, currency) {
 }
 
 export function rowLine(r, currency) {
-  const icon = r.type === 'receita' ? '💰' : '•';
+  const icon = r.source === 'fixo' ? '🔁' : r.type === 'receita' ? '💰' : '•';
   return `${icon} ${shortDate(r.occurred_on)} — ${r.description}: ${money(r.amount_cents, currency)} (${r.category})`;
 }
 
@@ -93,4 +97,21 @@ export function listText(rows, currency) {
 // Comparação sem acentos nem maiúsculas.
 export function fold(text) {
   return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+export function recurringLine(r, currency) {
+  const kind = r.type === 'receita' ? ' (receita)' : '';
+  return `🔁 dia ${r.day_of_month} — ${r.description}: ${money(r.amount_cents, currency)} (${r.category})${kind}`;
+}
+
+export function recurringListText(rows, currency) {
+  if (rows.length === 0) {
+    return 'Ainda não tem gastos fixos. Para criar um: _netflix 13,99 todo mês dia 5_.';
+  }
+  const expenses = rows.filter((r) => r.type === 'despesa').reduce((a, r) => a + r.amount_cents, 0);
+  const income = rows.filter((r) => r.type === 'receita').reduce((a, r) => a + r.amount_cents, 0);
+  const out = ['🔁 *Os seus fixos*', '', ...rows.map((r) => recurringLine(r, currency)), ''];
+  out.push(`Despesas fixas por mês: ${money(expenses, currency)}`);
+  if (income) out.push(`Receitas fixas por mês: ${money(income, currency)}`);
+  return out.join('\n');
 }

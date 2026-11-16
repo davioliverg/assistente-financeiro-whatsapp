@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { todayIn } from './format.js';
+import { materialize, nextDue } from './recurring.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const SESSION_DAYS = 7;
@@ -50,6 +51,7 @@ export function buildMonthData(rows, month) {
       category: r.category,
       type: r.type,
       cents: r.amount_cents,
+      fixed: r.source === 'fixo',
     })),
   };
 }
@@ -112,10 +114,20 @@ export function createPainel({ db, auth, botName }) {
     const user = await db.getUserById(userId);
     if (!user) return res.status(401).json({ error: 'sessao' });
 
-    const current = todayIn(user.timezone).today.slice(0, 7);
+    const today = todayIn(user.timezone).today;
+    await materialize(db, userId, today);
+    const current = today.slice(0, 7);
     const month = MONTH.test(req.query.mes) ? req.query.mes : current;
     const rows = await db.range(userId, `${addMonths(month, -5)}-01`, `${month}-31`);
-    res.json({ ...buildMonthData(rows, month), currentMonth: current, currency: user.currency, name: user.name || '' });
+    const recurring = (await db.listRecurring(userId)).map((r) => ({
+      description: r.description,
+      category: r.category,
+      type: r.type,
+      cents: r.amount_cents,
+      day: r.day_of_month,
+      next: nextDue(r, today),
+    }));
+    res.json({ ...buildMonthData(rows, month), recurring, currentMonth: current, currency: user.currency, name: user.name || '' });
   });
 
   router.get('/', (req, res) => {
@@ -134,6 +146,7 @@ export function createPainel({ db, auth, botName }) {
 <article class="card"><h2>Despesas por categoria</h2><div id="categories"></div></article>
 <article class="card"><h2>Despesas por dia</h2><div id="daily" class="chart"></div></article>
 <article class="card wide"><h2>Últimos 6 meses</h2><div class="legend"><span><i class="sw s1"></i>Despesas</span><span><i class="sw s2"></i>Receitas</span></div><div id="months" class="chart"></div></article>
+<article class="card wide"><h2>Fixos mensais</h2><div id="recurring"></div></article>
 <article class="card wide"><h2>Lançamentos do mês</h2><div class="table-wrap"><table id="table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th></tr></thead><tbody></tbody></table></div></article>
 </section>
 <div id="tip" class="tip" role="status" hidden></div>

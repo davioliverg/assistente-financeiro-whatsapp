@@ -164,6 +164,29 @@
     box.replaceChildren(root);
   }
 
+  function renderRecurring(d) {
+    const box = $('recurring');
+    if (!d.recurring.length) {
+      return box.replaceChildren(el('p', { class: 'empty' }, 'Sem gastos fixos. No WhatsApp: "netflix 13,99 todo mês dia 5".'));
+    }
+    const expenses = d.recurring.filter((r) => r.type === 'despesa').reduce((a, r) => a + r.cents, 0);
+    const rows = d.recurring.map((r) => {
+      const row = el('div', { class: 'fix' });
+      const name = el('div', { class: 'fix-name' }, r.description);
+      name.append(el('span', { class: 'under show' }, `${r.category}${r.type === 'receita' ? ' · receita' : ''}`));
+      const [, m, day] = r.next.split('-');
+      row.append(
+        el('div', { class: 'fix-day' }, `dia ${r.day}`),
+        name,
+        el('div', { class: 'fix-next' }, `próximo ${day}/${m}`),
+        el('div', { class: 'num' }, `${r.type === 'receita' ? '+' : '−'} ${money(r.cents)}`),
+      );
+      return row;
+    });
+    const total = el('p', { class: 'fix-total' }, `Despesas fixas por mês: ${money(expenses)}`);
+    box.replaceChildren(...rows, total);
+  }
+
   function renderTable(d) {
     const body = document.querySelector('#table tbody');
     if (!d.transactions.length) {
@@ -178,6 +201,7 @@
         const amount = el('td', { class: 'num' }, `${t.type === 'receita' ? '+' : '−'} ${money(t.cents)}`);
         const desc = el('td', {}, t.description);
         if (t.type === 'receita') desc.append(el('span', { class: 'tag' }, 'receita'));
+        if (t.fixed) desc.append(el('span', { class: 'tag' }, 'fixo'));
         desc.append(el('span', { class: 'under' }, t.category));
         tr.append(el('td', { class: 'date' }, `${day}/${m}`), desc, el('td', { class: 'cat-cell' }, t.category), amount);
         return tr;
@@ -195,7 +219,7 @@
     $('month-label').textContent = label.charAt(0).toUpperCase() + label.slice(1);
     $('next').disabled = d.month >= d.currentMonth;
     last = d;
-    renderTiles(d); renderCategories(d); renderDaily(d); renderMonths(d); renderTable(d);
+    renderTiles(d); renderCategories(d); renderDaily(d); renderMonths(d); renderRecurring(d); renderTable(d);
   }
 
   let last = null;

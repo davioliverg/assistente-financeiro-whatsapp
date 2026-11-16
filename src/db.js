@@ -24,6 +24,19 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_tx_user_date ON transactions (user_id, occurred_on);
+CREATE TABLE IF NOT EXISTS recurring (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  day_of_month INTEGER NOT NULL,
+  start_month TEXT NOT NULL,
+  last_posted_month TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS processed_messages (
   wamid TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -109,6 +122,44 @@ export function createDb(pool) {
         [userId, from, to],
       );
       return r.rows;
+    },
+
+    // ----- gastos fixos -----
+    async addRecurring(userId, r) {
+      const res = await q(
+        `INSERT INTO recurring (user_id, type, amount_cents, category, description, day_of_month, start_month)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [userId, r.type, r.amountCents, r.category, r.description, r.day, r.startMonth],
+      );
+      return res.rows[0];
+    },
+
+    async listRecurring(userId) {
+      const res = await q(
+        'SELECT * FROM recurring WHERE user_id = $1 AND active = true ORDER BY day_of_month, id',
+        [userId],
+      );
+      return res.rows;
+    },
+
+    // Cancela o fixo (deixa de lançar); os lançamentos já feitos ficam.
+    async cancelRecurring(userId, id) {
+      const res = await q(
+        'UPDATE recurring SET active = false WHERE user_id = $1 AND id = $2 AND active = true RETURNING *',
+        [userId, id],
+      );
+      return res.rows[0] || null;
+    },
+
+    // Marca um mês como lançado; devolve false se já estava (evita duplicados).
+    async claimRecurringMonth(id, month) {
+      const res = await q(
+        `UPDATE recurring SET last_posted_month = $2
+          WHERE id = $1 AND active = true AND (last_posted_month IS NULL OR last_posted_month < $2)
+          RETURNING id`,
+        [id, month],
+      );
+      return res.rows.length > 0;
     },
 
     // Últimos lançamentos do utilizador, do mais recente para o mais antigo.
